@@ -8,6 +8,7 @@ import AppToolbar from './components/layout/AppToolbar.vue'
 import AppFooter from './components/layout/AppFooter.vue'
 import BpmnCanvas from './components/editor/BpmnCanvas.vue'
 import PropertiesPanel from './components/properties/PropertiesPanel.vue'
+import ChatPanel from './components/chat/ChatPanel.vue'
 
 const store = useEditorStore()
 const canvasRef = ref(null)
@@ -161,6 +162,7 @@ onUnmounted(() => {
     <main class="main-content">
       <BpmnCanvas ref="canvasRef" />
       <PropertiesPanel v-if="store.showProperties" />
+      <ChatPanel v-if="store.showChat" />
     </main>
 
     <AppFooter />
