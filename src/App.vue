@@ -1,114 +1,147 @@
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useEditorStore } from './stores/editorStore'
 import { useKeyboardShortcuts } from './composables/useKeyboardShortcuts'
-import { downloadFile, downloadBlob, svgToPng } from './utils/exportUtils'
+import { useNotifications } from './composables/useNotifications'
+import { downloadFile, downloadBlob, svgToPng, generateExportFilename } from './utils/exportUtils'
+import { validateFile } from './utils/validation'
+import { FILE_CONFIG, EXPORT_CONFIG } from './constants'
 import AppHeader from './components/layout/AppHeader.vue'
 import AppToolbar from './components/layout/AppToolbar.vue'
 import AppFooter from './components/layout/AppFooter.vue'
 import BpmnCanvas from './components/editor/BpmnCanvas.vue'
 import PropertiesPanel from './components/properties/PropertiesPanel.vue'
 import ChatPanel from './components/chat/ChatPanel.vue'
+import NotificationContainer from './components/common/NotificationContainer.vue'
 
 const store = useEditorStore()
-const canvasRef = ref(null)
-const fileInputRef = ref(null)
+const { confirm, error: showError, success: showSuccess } = useNotifications()
+
+const canvasRef = ref<InstanceType<typeof BpmnCanvas> | null>(null)
+const fileInputRef = ref<HTMLInputElement | null>(null)
 
 // File operations
-async function handleNew() {
+async function handleNew(): Promise<void> {
   if (store.isDirty) {
-    const confirmed = confirm('You have unsaved changes. Create new diagram anyway?')
+    const confirmed = await confirm(
+      'Unsaved Changes',
+      'You have unsaved changes. Create new diagram anyway?'
+    )
     if (!confirmed) return
   }
   canvasRef.value?.createNewDiagram()
   store.setFileName(null)
   store.markClean()
+  showSuccess('New Diagram', 'Created a new blank diagram')
 }
 
-function handleOpenTrigger() {
+function handleOpenTrigger(): void {
   fileInputRef.value?.click()
 }
 
-async function handleOpenFile(file) {
+async function handleOpenFile(file: File): Promise<void> {
+  // Validate file
+  const validation = validateFile(file)
+  if (!validation.valid) {
+    showError('Invalid File', validation.errors.join(', '))
+    return
+  }
+
   if (store.isDirty) {
-    const confirmed = confirm('You have unsaved changes. Open another file anyway?')
+    const confirmed = await confirm(
+      'Unsaved Changes',
+      'You have unsaved changes. Open another file anyway?'
+    )
     if (!confirmed) return
   }
 
   const reader = new FileReader()
-  reader.onload = async (event) => {
+  reader.onload = async (event): Promise<void> => {
     try {
-      await canvasRef.value?.importXML(event.target.result)
-      store.setFileName(file.name)
-      store.markClean()
+      const content = event.target?.result
+      if (typeof content === 'string') {
+        await canvasRef.value?.importXML(content)
+        store.setFileName(file.name)
+        store.markClean()
+        showSuccess('File Loaded', `Successfully loaded ${file.name}`)
+      }
     } catch (err) {
-      alert('Failed to load BPMN file: ' + err.message)
+      const message = err instanceof Error ? err.message : 'Unknown error'
+      showError('Failed to Load', `Could not load BPMN file: ${message}`)
     }
+  }
+  reader.onerror = (): void => {
+    showError('Read Error', 'Failed to read the file')
   }
   reader.readAsText(file)
 }
 
-async function handleSave() {
+async function handleSave(): Promise<void> {
   const xml = await canvasRef.value?.exportXML()
   if (xml) {
-    const filename = store.currentFileName || 'diagram.bpmn'
-    downloadFile(xml, filename, 'application/xml')
+    const filename = store.currentFileName || FILE_CONFIG.DEFAULT_FILENAME
+    downloadFile(xml, filename, EXPORT_CONFIG.MIME_TYPES.XML)
     store.markClean()
+    showSuccess('Saved', `Diagram saved as ${filename}`)
   }
 }
 
-async function handleExportXML() {
+async function handleExportXML(): Promise<void> {
   const xml = await canvasRef.value?.exportXML()
   if (xml) {
-    const filename = (store.currentFileName?.replace(/\.[^.]+$/, '') || 'diagram') + '.bpmn'
-    downloadFile(xml, filename, 'application/xml')
+    const filename = generateExportFilename(store.currentFileName, 'bpmn')
+    downloadFile(xml, filename, EXPORT_CONFIG.MIME_TYPES.XML)
+    showSuccess('Exported', `Exported as ${filename}`)
   }
 }
 
-async function handleExportSVG() {
+async function handleExportSVG(): Promise<void> {
   const svg = await canvasRef.value?.exportSVG()
   if (svg) {
-    const filename = (store.currentFileName?.replace(/\.[^.]+$/, '') || 'diagram') + '.svg'
-    downloadFile(svg, filename, 'image/svg+xml')
+    const filename = generateExportFilename(store.currentFileName, 'svg')
+    downloadFile(svg, filename, EXPORT_CONFIG.MIME_TYPES.SVG)
+    showSuccess('Exported', `Exported as ${filename}`)
   }
 }
 
-async function handleExportPNG() {
+async function handleExportPNG(): Promise<void> {
   const svg = await canvasRef.value?.exportSVG()
   if (svg) {
     try {
-      const blob = await svgToPng(svg, 2)
-      const filename = (store.currentFileName?.replace(/\.[^.]+$/, '') || 'diagram') + '.png'
+      const blob = await svgToPng(svg, EXPORT_CONFIG.PNG_SCALE)
+      const filename = generateExportFilename(store.currentFileName, 'png')
       downloadBlob(blob, filename)
+      showSuccess('Exported', `Exported as ${filename}`)
     } catch (err) {
-      alert('Failed to export PNG: ' + err.message)
+      const message = err instanceof Error ? err.message : 'Unknown error'
+      showError('Export Failed', `Could not export PNG: ${message}`)
     }
   }
 }
 
 // Edit operations
-function handleUndo() {
+function handleUndo(): void {
   canvasRef.value?.undo()
 }
 
-function handleRedo() {
+function handleRedo(): void {
   canvasRef.value?.redo()
 }
 
 // Zoom operations
-function handleZoomIn() {
+function handleZoomIn(): void {
   canvasRef.value?.zoomIn()
 }
 
-function handleZoomOut() {
+function handleZoomOut(): void {
   canvasRef.value?.zoomOut()
 }
 
-function handleZoomFit() {
+function handleZoomFit(): void {
   canvasRef.value?.zoomFit()
 }
 
-function handleZoomReset() {
+function handleZoomReset(): void {
   canvasRef.value?.zoomReset()
 }
 
@@ -125,7 +158,7 @@ useKeyboardShortcuts({
 })
 
 // Warn before leaving with unsaved changes
-function handleBeforeUnload(e) {
+function handleBeforeUnload(e: BeforeUnloadEvent): void {
   if (store.isDirty) {
     e.preventDefault()
     e.returnValue = ''
@@ -146,7 +179,7 @@ onUnmounted(() => {
     <AppHeader />
     <AppToolbar
       @new="handleNew"
-      @open="(file) => file && handleOpenFile(file)"
+      @open="(file: File) => file && handleOpenFile(file)"
       @save="handleSave"
       @export-xml="handleExportXML"
       @export-svg="handleExportSVG"
@@ -171,10 +204,17 @@ onUnmounted(() => {
     <input
       ref="fileInputRef"
       type="file"
-      accept=".bpmn,.xml"
+      :accept="FILE_CONFIG.ALLOWED_EXTENSIONS.join(',')"
       style="display: none"
-      @change="(e) => e.target.files?.[0] && handleOpenFile(e.target.files[0])"
+      @change="(e: Event) => {
+        const target = e.target as HTMLInputElement
+        const file = target.files?.[0]
+        if (file) handleOpenFile(file)
+      }"
     />
+
+    <!-- Notification system -->
+    <NotificationContainer />
   </div>
 </template>
 

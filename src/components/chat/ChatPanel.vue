@@ -1,11 +1,21 @@
-<script setup>
-import { ref, watch, nextTick, inject, computed } from 'vue'
+<script setup lang="ts">
+import { ref, watch, nextTick, inject, computed, type ShallowRef } from 'vue'
 import { useEditorStore } from '../../stores/editorStore'
 import { useAiService } from '../../composables/useAiService'
+import { useNotifications } from '../../composables/useNotifications'
 import { BpmnTransformService } from '../../services/bpmnTransformService'
+import { UI } from '../../constants'
+import type BpmnModeler from 'bpmn-js/lib/Modeler'
+
+interface BpmnModelerContext {
+  modeler: ShallowRef<BpmnModeler | null>
+}
 
 const store = useEditorStore()
-const { modeler } = inject('bpmnModeler', {})
+const { error: showError } = useNotifications()
+
+const bpmnContext = inject<BpmnModelerContext>('bpmnModeler')
+const modeler = bpmnContext?.modeler
 
 const {
   isProcessing,
@@ -13,27 +23,31 @@ const {
   apiEndpoint,
   modelName,
   saveSettings,
-  sendMessage
+  sendMessage,
+  isConfigured
 } = useAiService()
 
 const inputMessage = ref('')
-const messagesContainer = ref(null)
+const messagesContainer = ref<HTMLDivElement | null>(null)
 const showSettings = ref(false)
 const settingsApiKey = ref(apiKey.value)
 const settingsEndpoint = ref(apiEndpoint.value)
 const settingsModel = ref(modelName.value)
 
-const hasApiKey = computed(() => !!apiKey.value)
+const hasApiKey = computed(() => isConfigured())
 
 // Scroll to bottom when messages change
-watch(() => store.chatMessages.length, async () => {
-  await nextTick()
-  if (messagesContainer.value) {
-    messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+watch(
+  () => store.chatMessages.length,
+  async () => {
+    await nextTick()
+    if (messagesContainer.value) {
+      messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+    }
   }
-})
+)
 
-async function handleSendMessage() {
+async function handleSendMessage(): Promise<void> {
   const message = inputMessage.value.trim()
   if (!message || isProcessing.value) return
 
@@ -69,45 +83,51 @@ async function handleSendMessage() {
       const results = await transformService.executeCommands(response.commands)
 
       // Check for errors
-      const errors = results.filter(r => !r.success)
+      const errors = results.filter((r) => !r.success)
       if (errors.length > 0) {
         store.addChatMessage({
           role: 'system',
-          content: `Some commands failed: ${errors.map(e => e.error).join(', ')}`
+          content: `Some commands failed: ${errors.map((e) => e.error).join(', ')}`
         })
       }
     }
   } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
     store.addChatMessage({
       role: 'system',
-      content: `Error: ${error.message}`
+      content: `Error: ${message}`
     })
   } finally {
     store.setAiProcessing(false)
   }
 }
 
-function handleKeyDown(e) {
+function handleKeyDown(e: KeyboardEvent): void {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault()
     handleSendMessage()
   }
 }
 
-function handleSaveSettings() {
-  saveSettings(settingsApiKey.value, settingsEndpoint.value, settingsModel.value)
-  showSettings.value = false
+function handleSaveSettings(): void {
+  try {
+    saveSettings(settingsApiKey.value, settingsEndpoint.value, settingsModel.value)
+    showSettings.value = false
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to save settings'
+    showError('Settings Error', message)
+  }
 }
 
-function handleCancelSettings() {
+function handleCancelSettings(): void {
   settingsApiKey.value = apiKey.value
   settingsEndpoint.value = apiEndpoint.value
   settingsModel.value = modelName.value
   showSettings.value = false
 }
 
-function formatTime(date) {
-  return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+function formatTime(date: Date): string {
+  return new Date(date).toLocaleTimeString([], UI.TIME_FORMAT)
 }
 </script>
 
