@@ -50,6 +50,19 @@ const store = useEditorStore()
             <path d="M3 3h7M3 9h7M3 15h7" />
           </svg>
         </button>
+        <div class="divider-vertical"></div>
+        <button
+          class="btn btn-ghost btn-icon"
+          @click="store.toggleChat"
+          :class="{ active: store.showChat }"
+          title="AI Assistant"
+        >
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10z" />
+            <circle cx="9" cy="10" r="1" fill="currentColor" />
+            <circle cx="15" cy="10" r="1" fill="currentColor" />
+          </svg>
+        </button>
       </div>
     </div>
   </header>
@@ -121,5 +134,12 @@ const store = useEditorStore()
 .btn.active {
   background-color: var(--primary-100);
   color: var(--primary-700);
+}
+
+.divider-vertical {
+  width: 1px;
+  height: 20px;
+  background-color: var(--gray-300);
+  margin: 0 var(--space-1);
 }
 </style>

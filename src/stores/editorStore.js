@@ -9,9 +9,14 @@ export const useEditorStore = defineStore('editor', () => {
   const zoom = ref(1)
   const showPalette = ref(true)
   const showProperties = ref(true)
+  const showChat = ref(false)
   const canUndo = ref(false)
   const canRedo = ref(false)
   const isLoading = ref(false)
+
+  // Chat state
+  const chatMessages = ref([])
+  const isAiProcessing = ref(false)
 
   // Computed
   const hasSelection = computed(() => selectedElement.value !== null)
@@ -50,6 +55,26 @@ export const useEditorStore = defineStore('editor', () => {
     showProperties.value = !showProperties.value
   }
 
+  function toggleChat() {
+    showChat.value = !showChat.value
+  }
+
+  function addChatMessage(message) {
+    chatMessages.value.push({
+      id: Date.now(),
+      timestamp: new Date(),
+      ...message
+    })
+  }
+
+  function clearChatMessages() {
+    chatMessages.value = []
+  }
+
+  function setAiProcessing(processing) {
+    isAiProcessing.value = processing
+  }
+
   function setUndoRedo(undo, redo) {
     canUndo.value = undo
     canRedo.value = redo
@@ -66,6 +91,8 @@ export const useEditorStore = defineStore('editor', () => {
     zoom.value = 1
     canUndo.value = false
     canRedo.value = false
+    chatMessages.value = []
+    isAiProcessing.value = false
   }
 
   return {
@@ -76,9 +103,12 @@ export const useEditorStore = defineStore('editor', () => {
     zoom,
     showPalette,
     showProperties,
+    showChat,
     canUndo,
     canRedo,
     isLoading,
+    chatMessages,
+    isAiProcessing,
     // Computed
     hasSelection,
     zoomPercent,
@@ -91,6 +121,10 @@ export const useEditorStore = defineStore('editor', () => {
     setZoom,
     togglePalette,
     toggleProperties,
+    toggleChat,
+    addChatMessage,
+    clearChatMessages,
+    setAiProcessing,
     setUndoRedo,
     setLoading,
     reset
