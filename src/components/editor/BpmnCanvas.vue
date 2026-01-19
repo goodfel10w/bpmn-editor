@@ -1,11 +1,16 @@
-<script setup>
-import { ref, provide, onMounted } from 'vue'
+<script setup lang="ts">
+import { ref, provide, onMounted, type Ref, type ShallowRef } from 'vue'
 import { useBpmnModeler } from '../../composables/useBpmnModeler'
 import { useEditorStore } from '../../stores/editorStore'
+import { useNotifications } from '../../composables/useNotifications'
+import { validateFile } from '../../utils/validation'
 import { BLANK_DIAGRAM } from '../../utils/bpmnTemplates'
+import type BpmnModeler from 'bpmn-js/lib/Modeler'
 
 const store = useEditorStore()
-const canvasRef = ref(null)
+const { error: showError, success: showSuccess } = useNotifications()
+
+const canvasRef = ref<HTMLDivElement | null>(null)
 const isDragging = ref(false)
 
 const {
@@ -25,8 +30,25 @@ const {
   deleteSelectedElements
 } = useBpmnModeler(canvasRef)
 
+// Define the type for what we're providing
+interface BpmnModelerContext {
+  modeler: ShallowRef<BpmnModeler | null>
+  importXML: (xml: string) => Promise<void>
+  exportXML: () => Promise<string | null>
+  exportSVG: () => Promise<string | null>
+  createNewDiagram: () => void
+  zoomIn: () => void
+  zoomOut: () => void
+  zoomFit: () => void
+  zoomReset: () => void
+  undo: () => void
+  redo: () => void
+  updateElementProperty: (elementId: string, property: string, value: unknown) => void
+  deleteSelectedElements: () => void
+}
+
 // Provide modeler functions to child components
-provide('bpmnModeler', {
+provide<BpmnModelerContext>('bpmnModeler', {
   modeler,
   importXML,
   exportXML,
@@ -43,33 +65,48 @@ provide('bpmnModeler', {
 })
 
 // Drag and drop handling
-function handleDragOver(e) {
+function handleDragOver(e: DragEvent): void {
   e.preventDefault()
   isDragging.value = true
 }
 
-function handleDragLeave() {
+function handleDragLeave(): void {
   isDragging.value = false
 }
 
-async function handleDrop(e) {
+async function handleDrop(e: DragEvent): Promise<void> {
   e.preventDefault()
   isDragging.value = false
 
   const file = e.dataTransfer?.files[0]
-  if (file && (file.name.endsWith('.bpmn') || file.name.endsWith('.xml'))) {
-    const reader = new FileReader()
-    reader.onload = async (event) => {
-      try {
-        await importXML(event.target.result)
+  if (!file) return
+
+  // Validate file
+  const validation = validateFile(file)
+  if (!validation.valid) {
+    showError('Invalid File', validation.errors.join(', '))
+    return
+  }
+
+  const reader = new FileReader()
+  reader.onload = async (event): Promise<void> => {
+    try {
+      const content = event.target?.result
+      if (typeof content === 'string') {
+        await importXML(content)
         store.setFileName(file.name)
         store.markClean()
-      } catch (err) {
-        alert('Failed to load BPMN file: ' + err.message)
+        showSuccess('File Loaded', `Successfully loaded ${file.name}`)
       }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error'
+      showError('Failed to Load', `Could not load BPMN file: ${message}`)
     }
-    reader.readAsText(file)
   }
+  reader.onerror = (): void => {
+    showError('Read Error', 'Failed to read the file')
+  }
+  reader.readAsText(file)
 }
 
 // Load sample diagram on mount

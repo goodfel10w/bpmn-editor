@@ -1,3 +1,11 @@
+/**
+ * BPMN XML templates
+ */
+
+/**
+ * A blank BPMN diagram with a single start event
+ * Used as the starting point for new diagrams
+ */
 export const BLANK_DIAGRAM = `<?xml version="1.0" encoding="UTF-8"?>
 <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
                   xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
